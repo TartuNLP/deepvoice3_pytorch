@@ -8,6 +8,7 @@ options:
     --num_workers=<n>        Num workers.
     --hparams=<parmas>       Hyper parameters [default: ].
     --preset=<json>          Path of preset parameters (json).
+    --speakers=<list>        Comma-separated list of speaker folder names
     -h, --help               Show help message.
 """
 from docopt import docopt
@@ -18,9 +19,12 @@ import importlib
 from hparams import hparams, hparams_debug_string
 
 
-def preprocess(mod, in_dir, out_root, num_workers):
+def preprocess(mod, in_dir, out_dir, num_workers, name, speakers):
     os.makedirs(out_dir, exist_ok=True)
-    metadata = mod.build_from_path(in_dir, out_dir, num_workers, tqdm=tqdm)
+    if name == "eesti_konekorpus":
+        metadata = mod.build_from_path(in_dir, out_dir, speakers, num_workers=num_workers, tqdm=tqdm)
+    else:
+        metadata = mod.build_from_path(in_dir, out_dir, num_workers=num_workers, tqdm=tqdm)
     write_metadata(metadata, out_dir)
 
 
@@ -44,6 +48,7 @@ if __name__ == "__main__":
     num_workers = args["--num_workers"]
     num_workers = cpu_count() if num_workers is None else int(num_workers)
     preset = args["--preset"]
+    speakers = args["--speakers"]
 
     # Load preset if specified
     if preset is not None:
@@ -54,6 +59,12 @@ if __name__ == "__main__":
     assert hparams.name == "deepvoice3"
     print(hparams_debug_string())
 
-    assert name in ["jsut", "ljspeech", "vctk", "nikl_m", "nikl_s", "json_meta"]
+    assert name in ["jsut", "ljspeech", "vctk", "nikl_m", "nikl_s", "json_meta", "eesti_konekorpus"]
     mod = importlib.import_module(name)
-    preprocess(mod, in_dir, out_dir, num_workers)
+
+    if speakers is not None:
+        speakers = speakers.split(',')
+    else:
+        speakers = []
+
+    preprocess(mod, in_dir, out_dir, num_workers, name, speakers)

@@ -25,6 +25,11 @@ try:
 except ImportError:
     ko = None
 
+try:
+    from deepvoice3_pytorch.frontend import et
+except ImportError:
+    et = None
+
 # if you are going to use the frontend, you need to modify _characters in symbol.py:
 # _characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!\'(),-.:;? ' + '¡¿ñáéíóúÁÉÍÓÚÑ'
 try:

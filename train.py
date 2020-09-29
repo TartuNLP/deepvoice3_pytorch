@@ -377,14 +377,14 @@ def prepare_spec_image(spectrogram):
 
 
 def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeaker):
-    # harded coded
+    # TODO: remove harded-coded sample texts.
     texts = [
-        "Scientists at the CERN laboratory say they have discovered a new particle.",
-        "There's a way to measure the acute emotional intelligence that has never gone out of style.",
-        "President Trump met with other leaders at the Group of 20 conference.",
-        "Generative adversarial network or variational auto-encoder.",
-        "Please call Stella.",
-        "Some have accepted this as a miracle without any physical explanation.",
+        "Kell on neli, Eesti Raadio uudistega on stuudios Meelis Kompus.",
+        "Külma on üks kuni viis kraadi ja saartel on õhutemperatuur miinus ühe ja pluss ühe kraadi vahel.",
+        "Need olid Eesti Raadio uudised.",
+        "Kanepi läbis Austraalias kvalifikatsiooni edukalt ja pääses kolmekümne kahe parema hulka.",
+        "Võõra viipekaardi leidnud alaealised lõid laiaks suure summa.",
+        "Las Vegases lasi mees maha kaks hotelli turvatöötajat.",
     ]
     import synthesis
     synthesis._frontend = _frontend
@@ -396,44 +396,44 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
     model_eval = build_model().to(device)
     model_eval.load_state_dict(model.state_dict())
 
-    # hard coded
-    speaker_ids = [0, 1, 10] if ismultispeaker else [None]
+    speaker_ids = range(0, model_eval.n_speakers) if ismultispeaker else [None]
     for speaker_id in speaker_ids:
         speaker_str = "multispeaker{}".format(speaker_id) if speaker_id is not None else "single"
 
-        for idx, text in enumerate(texts):
-            signal, alignment, _, mel = synthesis.tts(
-                model_eval, text, p=0, speaker_id=speaker_id, fast=True)
-            signal /= np.max(np.abs(signal))
+        if not ismultispeaker or model_eval.n_speakers > speaker_id:
+            for idx, text in enumerate(texts):
+                signal, alignment, _, mel = synthesis.tts(
+                    model_eval, text, p=0, speaker_id=speaker_id, fast=True)
+                signal /= np.max(np.abs(signal))
 
-            # Alignment
-            path = join(eval_output_dir, "step{:09d}_text{}_{}_alignment.png".format(
-                global_step, idx, speaker_str))
-            save_alignment(path, alignment)
-            tag = "eval_averaged_alignment_{}_{}".format(idx, speaker_str)
-            try:
-                writer.add_image(tag, np.uint8(cm.viridis(np.flip(alignment, 1).T) * 255), global_step)
-            except Exception as e:
-                warn(str(e))
+                # Alignment
+                path = join(eval_output_dir, "step{:09d}_text{}_{}_alignment.png".format(
+                    global_step, idx, speaker_str))
+                save_alignment(path, alignment)
+                tag = "eval_averaged_alignment_{}_{}".format(idx, speaker_str)
+                try:
+                    writer.add_image(tag, np.uint8(cm.viridis(np.flip(alignment, 1).T) * 255), global_step)
+                except Exception as e:
+                    warn(str(e))
 
-            # Mel
-            try:
-                writer.add_image("(Eval) Predicted mel spectrogram text{}_{}".format(idx, speaker_str),
-                                 prepare_spec_image(mel), global_step)
-            except Exception as e:
-                warn(str(e))
+                # Mel
+                try:
+                    writer.add_image("Eval_Predicted_mel_spectrogram_text{}_{}".format(idx, speaker_str),
+                                     prepare_spec_image(mel), global_step)
+                except Exception as e:
+                    warn(str(e))
 
-            # Audio
-            path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
-                global_step, idx, speaker_str))
-            audio.save_wav(signal, path)
+                # Audio
+                path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
+                    global_step, idx, speaker_str))
+                audio.save_wav(signal, path)
 
-            try:
-                writer.add_audio("(Eval) Predicted audio signal {}_{}".format(idx, speaker_str),
-                                 signal, global_step, sample_rate=hparams.sample_rate)
-            except Exception as e:
-                warn(str(e))
-                pass
+                try:
+                    writer.add_audio("Eval_Predicted_audio_signal_{}_{}".format(idx, speaker_str),
+                                     signal, global_step, sample_rate=hparams.sample_rate)
+                except Exception as e:
+                    warn(str(e))
+                    pass
 
 
 def save_states(global_step, writer, mel_outputs, linear_outputs, attn, mel, y,
@@ -482,7 +482,7 @@ def save_states(global_step, writer, mel_outputs, linear_outputs, attn, mel, y,
         mel_output = mel_outputs[idx].cpu().data.numpy()
         mel_output = prepare_spec_image(audio._denormalize(mel_output))
         try:
-            writer.add_image("Predicted mel spectrogram",
+            writer.add_image("Predicted_mel_spectrogram",
                              mel_output, global_step)
         except Exception as e:
             warn(str(e))
@@ -493,7 +493,7 @@ def save_states(global_step, writer, mel_outputs, linear_outputs, attn, mel, y,
         linear_output = linear_outputs[idx].cpu().data.numpy()
         spectrogram = prepare_spec_image(audio._denormalize(linear_output))
         try:
-            writer.add_image("Predicted linear spectrogram",
+            writer.add_image("Predicted_linear_spectrogram",
                              spectrogram, global_step)
         except Exception as e:
             warn(str(e))
@@ -505,7 +505,7 @@ def save_states(global_step, writer, mel_outputs, linear_outputs, attn, mel, y,
         path = join(checkpoint_dir, "step{:09d}_predicted.wav".format(
             global_step))
         try:
-            writer.add_audio("Predicted audio signal", signal,
+            writer.add_audio("Predicted_audio_signal", signal,
                              global_step, sample_rate=hparams.sample_rate)
         except Exception as e:
             warn(str(e))
@@ -517,7 +517,7 @@ def save_states(global_step, writer, mel_outputs, linear_outputs, attn, mel, y,
         mel_output = mel[idx].cpu().data.numpy()
         mel_output = prepare_spec_image(audio._denormalize(mel_output))
         try:
-            writer.add_image("Target mel spectrogram", mel_output, global_step)
+            writer.add_image("Target_mel_spectrogram", mel_output, global_step)
         except Exception as e:
             warn(str(e))
             pass
@@ -527,7 +527,7 @@ def save_states(global_step, writer, mel_outputs, linear_outputs, attn, mel, y,
         linear_output = y[idx].cpu().data.numpy()
         spectrogram = prepare_spec_image(audio._denormalize(linear_output))
         try:
-            writer.add_image("Target linear spectrogram",
+            writer.add_image("Target_linear_spectrogram",
                              spectrogram, global_step)
         except Exception as e:
             warn(str(e))
@@ -762,7 +762,7 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
             writer.add_scalar("loss", float(loss.item()), global_step)
             if train_seq2seq:
                 writer.add_scalar("done_loss", float(done_loss.item()), global_step)
-                writer.add_scalar("mel loss", float(mel_loss.item()), global_step)
+                writer.add_scalar("mel_loss", float(mel_loss.item()), global_step)
                 writer.add_scalar("mel_l1_loss", float(mel_l1_loss.item()), global_step)
                 writer.add_scalar("mel_binary_div_loss", float(mel_binary_div.item()), global_step)
             if train_postnet:
@@ -772,14 +772,14 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
             if train_seq2seq and hparams.use_guided_attention:
                 writer.add_scalar("attn_loss", float(attn_loss.item()), global_step)
             if clip_thresh > 0:
-                writer.add_scalar("gradient norm", grad_norm, global_step)
-            writer.add_scalar("learning rate", current_lr, global_step)
+                writer.add_scalar("gradient_norm", grad_norm, global_step)
+            writer.add_scalar("learning_rate", current_lr, global_step)
 
             global_step += 1
             running_loss += loss.item()
 
         averaged_loss = running_loss / (len(data_loader))
-        writer.add_scalar("loss (per epoch)", averaged_loss, global_epoch)
+        writer.add_scalar("loss_per_epoch", averaged_loss, global_epoch)
         print("Loss: {}".format(running_loss / (len(data_loader))))
 
         global_epoch += 1

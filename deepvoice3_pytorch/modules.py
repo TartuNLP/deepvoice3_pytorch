@@ -236,6 +236,6 @@ def get_mask_from_lengths(memory, memory_lengths):
         memory_lengths: array like
     """
     max_len = max(memory_lengths)
-    mask = torch.arange(max_len).expand(memory.size(0), max_len) < torch.tensor(memory_lengths).unsqueeze(-1)
+    mask = torch.arange(max_len).expand(memory.size(0), max_len) < torch.tensor(memory_lengths).unsqueeze(-1).float()
     mask = mask.to(memory.device)
     return ~mask

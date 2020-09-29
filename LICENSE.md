@@ -1,5 +1,7 @@
 The deepvoice3_pytorch package is licensed under the MIT "Expat" License:
 
+> Copyright (c) 2020: University of Tartu.
+>
 > Copyright (c) 2017: Ryuichi Yamamoto.
 >
 > Permission is hereby granted, free of charge, to any person obtaining
