@@ -4,6 +4,7 @@ usage: train.py [options]
 
 options:
     --data-root=<dir>            Directory contains preprocessed features.
+    --data-file=<path>           Filename inside data-root that contains a list of training data items.
     --checkpoint-dir=<dir>       Directory where to save model checkpoints [default: checkpoints].
     --hparams=<parmas>           Hyper parameters [default: ].
     --preset=<json>              Path of preset parameters (json).
@@ -17,6 +18,8 @@ options:
     --reset-optimizer            Reset optimizer.
     --load-embedding=<path>      Load embedding from checkpoint.
     --speaker-id=<N>             Use specific speaker of data in case for multi-speaker datasets.
+    --eval-speakers=<list>       For multi-speaker models, which speakers to create eval samples for
+    --eval-texts=<path>          Evaluation sample sentences text file path.
     -h, --help                   Show this help message and exit
 """
 from docopt import docopt
@@ -94,15 +97,16 @@ def plot_alignment(alignment, path, info=None):
 
 
 class TextDataSource(FileDataSource):
-    def __init__(self, data_root, speaker_id=None):
+    def __init__(self, data_root, data_file, speaker_id=None):
         self.data_root = data_root
+        self.data_file = data_file
         self.speaker_ids = None
         self.multi_speaker = False
         # If not None, filter by speaker_id
         self.speaker_id = speaker_id
 
     def collect_files(self):
-        meta = join(self.data_root, "train.txt")
+        meta = join(self.data_root, self.data_file)
         with open(meta, "rb") as f:
             lines = f.readlines()
         l = lines[0].decode("utf-8").split("|")
@@ -147,14 +151,15 @@ class TextDataSource(FileDataSource):
 
 
 class _NPYDataSource(FileDataSource):
-    def __init__(self, data_root, col, speaker_id=None):
+    def __init__(self, data_root, col, data_file, speaker_id=None):
         self.data_root = data_root
+        self.data_file = data_file
         self.col = col
         self.frame_lengths = []
         self.speaker_id = speaker_id
 
     def collect_files(self):
-        meta = join(self.data_root, "train.txt")
+        meta = join(self.data_root, self.data_file)
         with open(meta, "rb") as f:
             lines = f.readlines()
         l = lines[0].decode("utf-8").split("|")
@@ -183,13 +188,13 @@ class _NPYDataSource(FileDataSource):
 
 
 class MelSpecDataSource(_NPYDataSource):
-    def __init__(self, data_root, speaker_id=None):
-        super(MelSpecDataSource, self).__init__(data_root, 1, speaker_id)
+    def __init__(self, data_root, data_file, speaker_id=None):
+        super(MelSpecDataSource, self).__init__(data_root, 1, data_file, speaker_id)
 
 
 class LinearSpecDataSource(_NPYDataSource):
-    def __init__(self, data_root, speaker_id=None):
-        super(LinearSpecDataSource, self).__init__(data_root, 0, speaker_id)
+    def __init__(self, data_root, data_file, speaker_id=None):
+        super(LinearSpecDataSource, self).__init__(data_root, 0, data_file, speaker_id)
 
 
 class PartialyRandomizedSimilarTimeLengthSampler(Sampler):
@@ -376,16 +381,7 @@ def prepare_spec_image(spectrogram):
     return np.uint8(cm.magma(spectrogram.T) * 255)
 
 
-def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeaker):
-    # TODO: remove harded-coded sample texts.
-    texts = [
-        "Kell on neli, Eesti Raadio uudistega on stuudios Meelis Kompus.",
-        "Külma on üks kuni viis kraadi ja saartel on õhutemperatuur miinus ühe ja pluss ühe kraadi vahel.",
-        "Need olid Eesti Raadio uudised.",
-        "Kanepi läbis Austraalias kvalifikatsiooni edukalt ja pääses kolmekümne kahe parema hulka.",
-        "Võõra viipekaardi leidnud alaealised lõid laiaks suure summa.",
-        "Las Vegases lasi mees maha kaks hotelli turvatöötajat.",
-    ]
+def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeaker, eval_texts, eval_speakers=None):
     import synthesis
     synthesis._frontend = _frontend
 
@@ -396,12 +392,16 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
     model_eval = build_model().to(device)
     model_eval.load_state_dict(model.state_dict())
 
-    speaker_ids = range(0, model_eval.n_speakers) if ismultispeaker else [None]
+    if ismultispeaker:
+        speaker_ids = eval_speakers if eval_speakers is not None else range(0, model_eval.n_speakers)
+    else:
+        speaker_ids = [None]
+
     for speaker_id in speaker_ids:
         speaker_str = "multispeaker{}".format(speaker_id) if speaker_id is not None else "single"
 
         if not ismultispeaker or model_eval.n_speakers > speaker_id:
-            for idx, text in enumerate(texts):
+            for idx, text in enumerate(eval_texts):
                 signal, alignment, _, mel = synthesis.tts(
                     model_eval, text, p=0, speaker_id=speaker_id, fast=True)
                 signal /= np.max(np.abs(signal))
@@ -602,6 +602,7 @@ def guided_attentions(input_lengths, target_lengths, max_target_len, g=0.2):
 
 
 def train(device, model, data_loader, optimizer, writer,
+          eval_texts, eval_speakers = None,
           init_lr=0.002,
           checkpoint_dir=None, checkpoint_interval=None, nepochs=None,
           clip_thresh=1.0,
@@ -749,7 +750,7 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
 
             if global_step > 0 and global_step % hparams.eval_interval == 0:
                 eval_model(global_step, writer, device, model,
-                           checkpoint_dir, ismultispeaker)
+                           checkpoint_dir, ismultispeaker, eval_texts, eval_speakers)
 
             # Update
             loss.backward()
@@ -913,6 +914,16 @@ if __name__ == "__main__":
     data_root = args["--data-root"]
     if data_root is None:
         data_root = join(dirname(__file__), "data", "ljspeech")
+    data_file = args["--data-file"]
+    if data_file is None:
+        data_file = "train.txt"
+
+    eval_speakers = args['--eval-speakers']
+    if eval_speakers is not None:
+        eval_speakers = [int(i) for i in eval_speakers.split(',')]
+
+    with open(args['--eval-texts'], encoding='utf-8') as f:
+        eval_texts = f.readlines()
 
     log_event_path = args["--log-event-path"]
     reset_optimizer = args["--reset-optimizer"]
@@ -951,9 +962,9 @@ if __name__ == "__main__":
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     # Input dataset definitions
-    X = FileSourceDataset(TextDataSource(data_root, speaker_id))
-    Mel = FileSourceDataset(MelSpecDataSource(data_root, speaker_id))
-    Y = FileSourceDataset(LinearSpecDataSource(data_root, speaker_id))
+    X = FileSourceDataset(TextDataSource(data_root, data_file, speaker_id))
+    Mel = FileSourceDataset(MelSpecDataSource(data_root, data_file, speaker_id))
+    Y = FileSourceDataset(LinearSpecDataSource(data_root, data_file, speaker_id))
 
     # Prepare sampler
     frame_lengths = Mel.file_data_source.frame_lengths
@@ -1008,6 +1019,8 @@ if __name__ == "__main__":
     # Train!
     try:
         train(device, model, data_loader, optimizer, writer,
+              eval_speakers=eval_speakers,
+              eval_texts=eval_texts,
               init_lr=hparams.initial_learning_rate,
               checkpoint_dir=checkpoint_dir,
               checkpoint_interval=hparams.checkpoint_interval,

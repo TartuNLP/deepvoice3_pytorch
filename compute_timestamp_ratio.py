@@ -1,6 +1,6 @@
 """Compute output/input timestamp ratio.
 
-usage: compute_timestamp_ratio.py [options] <data_root>
+usage: compute_timestamp_ratio.py [options] <data_root> <data_file>
 
 options:
     --hparams=<parmas>        Hyper parameters [default: ].
@@ -20,6 +20,7 @@ from deepvoice3_pytorch import frontend
 if __name__ == "__main__":
     args = docopt(__doc__)
     data_root = args["<data_root>"]
+    data_file = args["<data_file>"]
     preset = args["--preset"]
 
     # Load preset if specified
@@ -33,8 +34,8 @@ if __name__ == "__main__":
     train._frontend = getattr(frontend, hparams.frontend)
 
     # Code below
-    X = FileSourceDataset(TextDataSource(data_root))
-    Mel = FileSourceDataset(MelSpecDataSource(data_root))
+    X = FileSourceDataset(TextDataSource(data_root, data_file))
+    Mel = FileSourceDataset(MelSpecDataSource(data_root, data_file))
 
     in_sizes = []
     out_sizes = []

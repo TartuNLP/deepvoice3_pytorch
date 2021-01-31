@@ -17,6 +17,9 @@ from multiprocessing import cpu_count
 from tqdm import tqdm
 import importlib
 from hparams import hparams, hparams_debug_string
+import warnings
+
+warnings.simplefilter('ignore')
 
 
 def preprocess(mod, in_dir, out_dir, num_workers, name, speakers):
