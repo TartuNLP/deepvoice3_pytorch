@@ -30,6 +30,11 @@ try:
 except ImportError:
     et = None
 
+try:
+    from deepvoice3_pytorch.frontend import et_training
+except ImportError:
+    et_training = None
+
 # if you are going to use the frontend, you need to modify _characters in symbol.py:
 # _characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!\'(),-.:;? ' + '¡¿ñáéíóúÁÉÍÓÚÑ'
 try:
