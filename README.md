@@ -23,7 +23,7 @@ Pretrained public model files are available in the [releases section](https://gi
 Please install packages listed above first, and then
 
 ```
-git clone https://github.com/r9y9/deepvoice3_pytorch && cd deepvoice3_pytorch
+git clone https://github.com/TartuNLP/deepvoice3_pytorch --recurse-submodules && cd deepvoice3_pytorch
 pip install -e ".[bin]"
 ```
 
